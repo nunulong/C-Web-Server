@@ -201,17 +201,21 @@ int send_response(int fd, char *header, char *content_type, char *body)
   int response_length;
 
   // !!!!  IMPLEMENT ME
+  char buff[100];
   struct tm *gmt;
   time_t now;
 
   time(&now);
   gmt = gmtime(&now);
+  strftime(buff, sizeof(buff) - 1, "%a %b %d %T %Z %Y", gmt);
 
-  int content_length = strlen(body);
+  unsigned long int content_length = strlen(body);
 
-  sprintf(response, "%s\nDate:%s\nConnection: close\nContent-Length: %d\nContent-Type: %s\n\n%s", header, gmt, content_length, content_type, body);
+  sprintf(response, "%s\nDate:%s\nConnection: close\nContent-Length: %lu\nContent-Type: %s\n\n%s", header, buff, content_length, content_type, body);
 
   // Send it all!
+  response_length = strlen(response);
+
   int rv = send(fd, response, response_length, 0);
 
   if (rv < 0)
@@ -250,7 +254,12 @@ void get_root(int fd)
 void get_d20(int fd)
 {
   // !!!! IMPLEMENT ME
-  int *response_body = 1;
+  int min_num = 1;
+  int max_num = 20;
+  char response_body[2];
+
+  int random_number = rand() % (max_num - min_num + 1) + min_num;
+  snprintf(response_body, 2, "%d", random_number);
   send_response(fd, "HTTP/1.1 200 OK", "text/plain", response_body);
 }
 
@@ -260,6 +269,14 @@ void get_d20(int fd)
 void get_date(int fd)
 {
   // !!!! IMPLEMENT ME
+  char buff[100];
+  struct tm *gmt;
+  time_t now;
+
+  time(&now);
+  gmt = gmtime(&now);
+  strftime(buff, sizeof(buff) - 1, "%a %b %d %T %Z %Y", gmt);
+  send_response(fd, "HTTP/1.1 20 OK", "text/plain", buff);
 }
 
 /**
