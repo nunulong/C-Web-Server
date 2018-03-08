@@ -203,19 +203,16 @@ int send_response(int fd, char *header, char *content_type, char *body)
   // !!!!  IMPLEMENT ME
   char buff[100];
   struct tm *gmt;
-  time_t now;
+  time_t now = time(NULL);
 
-  time(&now);
   gmt = gmtime(&now);
   strftime(buff, sizeof(buff) - 1, "%a %b %d %T %Z %Y", gmt);
 
   unsigned long int content_length = strlen(body);
 
-  sprintf(response, "%s\nDate:%s\nConnection: close\nContent-Length: %lu\nContent-Type: %s\n\n%s", header, buff, content_length, content_type, body);
+  response_length = sprintf(response, "%s\nDate:%s\nConnection: close\nContent-Length: %lu\nContent-Type: %s\n\n%s", header, buff, content_length, content_type, body);
 
   // Send it all!
-  response_length = strlen(response);
-
   int rv = send(fd, response, response_length, 0);
 
   if (rv < 0)
@@ -233,7 +230,7 @@ void resp_404(int fd, char *path)
 {
   char response_body[1024];
 
-  sprintf(response_body, "404: %s not found", path);
+  sprintf(response_body, "404: %s not found\n", path);
 
   send_response(fd, "HTTP/1.1 404 NOT FOUND", "text/html", response_body);
 }
@@ -244,7 +241,7 @@ void resp_404(int fd, char *path)
 void get_root(int fd)
 {
   // !!!! IMPLEMENT ME
-  char *response_body = "<h1>Hello, world!</h1>";
+  char *response_body = "<h1>Hello, world!</h1>\n";
   send_response(fd, "HTTP/1.1 200 OK", "text/html", response_body);
 }
 
@@ -257,9 +254,12 @@ void get_d20(int fd)
   int min_num = 1;
   int max_num = 20;
   char response_body[2];
+  time_t t = time(NULL);
+
+  srand((unsigned)t);
 
   int random_number = rand() % (max_num - min_num + 1) + min_num;
-  snprintf(response_body, 2, "%d", random_number);
+  snprintf(response_body, 2, "%d\n", random_number);
   send_response(fd, "HTTP/1.1 200 OK", "text/plain", response_body);
 }
 
@@ -271,9 +271,8 @@ void get_date(int fd)
   // !!!! IMPLEMENT ME
   char buff[100];
   struct tm *gmt;
-  time_t now;
+  time_t now = time(NULL);
 
-  time(&now);
   gmt = gmtime(&now);
   strftime(buff, sizeof(buff) - 1, "%a %b %d %T %Z %Y", gmt);
   send_response(fd, "HTTP/1.1 20 OK", "text/plain", buff);
