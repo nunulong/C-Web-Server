@@ -201,7 +201,7 @@ int send_response(int fd, char *header, char *content_type, char *body)
   int response_length;
 
   // !!!!  IMPLEMENT ME
-  char buff[100];
+  char buff[128];
   struct tm *gmt;
   time_t now = time(NULL);
 
@@ -253,7 +253,7 @@ void get_d20(int fd)
   // !!!! IMPLEMENT ME
   int min_num = 1;
   int max_num = 20;
-  char response_body[2];
+  char response_body[8];
   time_t t = time(NULL);
 
   srand((unsigned)t);
@@ -269,13 +269,13 @@ void get_d20(int fd)
 void get_date(int fd)
 {
   // !!!! IMPLEMENT ME
-  char buff[100];
+  char response_body[128];
   struct tm *gmt;
   time_t now = time(NULL);
 
   gmt = gmtime(&now);
-  strftime(buff, sizeof(buff) - 1, "%a %b %d %T %Z %Y", gmt);
-  send_response(fd, "HTTP/1.1 20 OK", "text/plain", buff);
+  strftime(response_body, sizeof(response_body) - 1, "%a %b %d %T %Z %Y", gmt);
+  send_response(fd, "HTTP/1.1 200 OK", "text/plain", response_body);
 }
 
 /**
@@ -284,8 +284,35 @@ void get_date(int fd)
 void post_save(int fd, char *body)
 {
   // !!!! IMPLEMENT ME
+  char response_body[128];
+  FILE *fp;
+  char *status;
 
   // Save the body and send a response
+  fp = fopen("post_data.txt", "wb");
+
+  if (fp != NULL)
+  {
+    // Exclusive lock to keep processes from trying to write the file at the
+    // same time. This is only necessary if we've implemented a
+    // multiprocessed version with fork().
+    flock(fileno(fp), LOCK_EX);
+    // Write body
+    fwrite(body, sizeof(char), strlen(body), fp);
+
+    // Unlock
+    flock(fileno(fp), LOCK_UN);
+    // Close
+    fclose(fp);
+    status = "ok";
+  }
+  else
+  {
+    status = "fail";
+  }
+
+  sprintf(response_body, "{\"status\": \"%s\"}", status);
+  send_response(fd, "HTTP/1.1 201 OK", "application/json", response_body);
 }
 
 /**
@@ -297,6 +324,23 @@ void post_save(int fd, char *body)
 char *find_end_of_header(char *header)
 {
   // !!!! IMPLEMENT ME
+  char *p;
+  p = strstr(header, "\n\n");
+  if (p != NULL)
+  {
+    return p;
+  }
+  p = strstr(header, "\r\n\r\n");
+  if (p != NULL)
+  {
+    return p;
+  }
+  p = strstr(header, "\n\n");
+  if (p != NULL)
+  {
+    return p;
+  }
+  return 0;
 }
 
 /**
@@ -323,12 +367,34 @@ void handle_http_request(int fd)
   // NUL terminate request string
   request[bytes_recvd] = '\0';
 
-  // !!!! IMPLEMENT ME
-  // Get the request type and path from the first line
-  // Hint: sscanf()!
+  // Parse the first line of the request
+  // char *first_line = request;
+
+  // Look for newline
+  // p = strchr(first_line, '\n');
+  // *p = '\0';
+
+  // Remaining header
+  // char *header = p + 1; // +1 to skip the '\n'
+
+  // Look for two newlines marking the end of the header
+  p = find_end_of_header(request);
+
+  if (p == NULL)
+  {
+    printf("Could not find end of header\n");
+    exit(1);
+  }
+
+  // And here is the body
+  char *body = p;
+
+  /*
+  * Now that we've assessed the request, we can take actions.
+  */
+
+  // Read the three components of the first request line
   sscanf(request, "%s %s %s", request_type, request_path, request_protocol);
-  // !!!! IMPLEMENT ME (stretch goal)
-  // find_end_of_header()
 
   // !!!! IMPLEMENT ME
   // call the appropriate handler functions, above, with the incoming data
@@ -345,6 +411,17 @@ void handle_http_request(int fd)
     else if (strcmp(request_path, "/date") == 0)
     {
       get_date(fd);
+    }
+    else
+    {
+      resp_404(fd, request_path);
+    }
+  }
+  else if (strcmp(request_type, "POST") == 0)
+  {
+    if (strcmp(request_path, "/save") == 0)
+    {
+      post_save(fd, body);
     }
     else
     {
@@ -404,8 +481,13 @@ int main(void)
 
     // !!!! IMPLEMENT ME (stretch goal)
     // Convert this to be multiprocessed with fork()
-
-    handle_http_request(newfd);
+    if (fork() == 0)
+    // child process
+    {
+      close(listenfd);
+      handle_http_request(newfd);
+      exit(0);
+    }
 
     // Done with this
     close(newfd);
